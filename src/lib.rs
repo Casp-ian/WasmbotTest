@@ -1,11 +1,17 @@
+use std::collections::HashMap;
+
 use wasmbot_client::*;
 
 struct Mapper {
-    data: Vec<u8>,
+    data: HashMap<(i32, i32), u8>,
+    pos: (i32, i32),
 }
 impl Client for Mapper {
     fn create() -> Self {
-        return Mapper { data: vec![] };
+        return Mapper {
+            data: HashMap::new(),
+            pos: (0, 0),
+        };
     }
 
     fn receive_game_params(&mut self, _params: wasmbot_messages::InitialParameters) -> bool {
