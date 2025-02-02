@@ -7,20 +7,25 @@ use wasmbot_messages::{
 };
 
 struct Mapper {
-    map: HashMap<(i16, i16), (TileType)>,
+    map: HashMap<(i16, i16), TileType>,
     pos: (i16, i16),
     last_move: Option<Direction>,
 }
 impl Client for Mapper {
     fn create() -> Self {
+        let mut map: HashMap<(i16, i16), TileType> = HashMap::new();
+        map.reserve(3000);
         return Mapper {
-            map: HashMap::new(),
+            map,
             pos: (0, 0),
             last_move: None,
         };
     }
 
-    fn receive_game_params(&mut self, _params: InitialParameters) -> bool {
+    fn receive_game_params(&mut self, params: InitialParameters) -> bool {
+        if params.diagonal_movement {
+            log("Not built for diagonal movement ;-;");
+        }
         return true;
     }
 
@@ -31,11 +36,11 @@ impl Client for Mapper {
         };
     }
 
-    // NOTE if this panics it silently fails, no user feedback, TODO fix this in the rust wasmbot library
     fn tick(&mut self, pc: PresentCircumstances) -> Message {
         self.update_pos(pc.last_move_result);
 
         if let Some(action) = open_door_if_near(&pc) {
+            self.last_move = None;
             return Message::Open(action);
         }
 
@@ -80,112 +85,56 @@ impl Mapper {
             let x: i16 = (i % width) - radius + self.pos.0;
             let y: i16 = (i / width) - radius + self.pos.1;
 
-            let tile = pc.surroundings[i as usize];
-            if tile == TileType::Void {
+            // if it already has it, dont remap it
+            if self.map.contains_key(&(x, y)) {
                 continue;
             }
-            // add to the map overrides if it was already there, need to override for void tiles
-            self.map.insert((x, y), tile);
+            // store what tile it is in your map, if it is not a void tile
+            let tile = pc.surroundings[i as usize];
+            if tile != TileType::Void {
+                self.map.insert((x, y), tile);
+            }
         }
     }
 
+    // Breadth first search untill first unmapped tile
     fn pathfind(&self) -> Direction {
         let mut visited: HashSet<(i16, i16)> = HashSet::new();
-        let mut frontier: VecDeque<((i16, i16), Vec<Direction>)> = VecDeque::new();
+        let mut frontier: VecDeque<((i16, i16), Option<Direction>)> = VecDeque::new();
 
-        frontier.push_back((self.pos, vec![]));
+        frontier.push_back((self.pos, None));
 
         while let Some(a) = frontier.pop_front() {
             visited.insert(a.0);
 
-            let (up, down, left, right) = adjacents(&a.0);
+            let directions = adjacents(&a.0);
+            let directionners = [
+                Direction::North,
+                Direction::South,
+                Direction::West,
+                Direction::East,
+            ];
 
-            // the thing -----
-            let thing = self.map.get(&up);
-            if thing.is_none() || thing.unwrap() == &TileType::Void {
-                // NOTE WIN, return a direction
-                // log(&format!("going to {:?} and {:?}", a.0, a.1));
-                return a.1[0];
-            }
+            for i in 0..4 {
+                // skip if direction already visited
+                if !visited.contains(&directions[i]) {
+                    // if we mapped it already check if traversible
+                    if let Some(b) = self.map.get(&directions[i]) {
+                        if b != &TileType::Wall {
+                            // add to frontier
+                            let newa = a.1.unwrap_or(directionners[i]);
+                            frontier.push_back((directions[i], Some(newa)));
+                        }
 
-            let thing = thing.unwrap();
-
-            // if traversible
-            if !visited.contains(&up)
-                && (thing == &TileType::Floor
-                    || thing == &TileType::OpenDoor
-                    || thing == &TileType::ClosedDoor)
-            {
-                let mut new_list = a.1.clone();
-                new_list.push(Direction::North);
-                frontier.push_back((up, new_list));
-            }
-
-            // the thing -----
-            let thing = self.map.get(&down);
-            if thing.is_none() || thing.unwrap() == &TileType::Void {
-                // NOTE WIN, return a direction
-                // log(&format!("going to {:?} and {:?}", a.0, a.1));
-                return a.1[0];
-            }
-
-            let thing = thing.unwrap();
-
-            // if traversible
-            if !visited.contains(&down)
-                && (thing == &TileType::Floor
-                    || thing == &TileType::OpenDoor
-                    || thing == &TileType::ClosedDoor)
-            {
-                let mut new_list = a.1.clone();
-                new_list.push(Direction::South);
-                frontier.push_back((down, new_list));
-            }
-
-            // the thing -----
-            let thing = self.map.get(&left);
-            if thing.is_none() || thing.unwrap() == &TileType::Void {
-                // NOTE WIN, return a direction
-                // log(&format!("going to {:?} and {:?}", a.0, a.1));
-                return a.1[0];
-            }
-
-            let thing = thing.unwrap();
-
-            // if traversible
-            if !visited.contains(&left)
-                && (thing == &TileType::Floor
-                    || thing == &TileType::OpenDoor
-                    || thing == &TileType::ClosedDoor)
-            {
-                let mut new_list = a.1.clone();
-                new_list.push(Direction::West);
-                frontier.push_back((left, new_list));
-            }
-
-            // the thing -----
-            let thing = self.map.get(&right);
-            if thing.is_none() || thing.unwrap() == &TileType::Void {
-                // NOTE WIN, return a direction
-                // log(&format!("going to {:?} and {:?}", a.0, a.1));
-                return a.1[0];
-            }
-
-            let thing = thing.unwrap();
-
-            // if traversible
-            if !visited.contains(&right)
-                && (thing == &TileType::Floor
-                    || thing == &TileType::OpenDoor
-                    || thing == &TileType::ClosedDoor)
-            {
-                let mut new_list = a.1.clone();
-                new_list.push(Direction::East);
-                frontier.push_back((right, new_list));
+                    // if its not yet mapped we go there
+                    } else {
+                        return a.1.unwrap();
+                    }
+                }
             }
         }
 
-        log("died");
+        log("Cant find any other unmapped tiles!");
         panic!();
     }
 }
@@ -217,13 +166,13 @@ fn open_door_if_near(pc: &PresentCircumstances) -> Option<Open> {
 }
 
 #[rustfmt::skip]
-fn adjacents(pos: &(i16, i16)) -> ((i16, i16), (i16, i16), (i16, i16), (i16, i16)) {
+fn adjacents(pos: &(i16, i16)) -> [(i16, i16); 4] {
     let up    = ( pos.0,     pos.1 - 1 );
     let down  = ( pos.0,     pos.1 + 1 );
     let left  = ( pos.0 - 1, pos.1     );
     let right = ( pos.0 + 1, pos.1     );
 
-    return (up, down, left, right);
+    return [up, down, left, right];
 }
 
 register_client!(Mapper);
