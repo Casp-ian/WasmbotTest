@@ -12,4 +12,4 @@ dependencies = [
 [[package]]
 name = "wasmbot_client"
 version = "0.0.0"
-source = "git+https://github.com/sjml/wasmbots.git#7f43c36ec9e56b40e71ad39aa649dc290d656714"
+source = "git+https://github.com/sjml/wasmbots.git?branch=next#9567205f189b1f4341e72c1dd50c3ed272c53c63"

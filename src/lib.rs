@@ -1,9 +1,12 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet, VecDeque},
+};
 
 use wasmbot_client::*;
 use wasmbot_messages::{
-    Direction, InitialParameters, Message, MoveResult, MoveTo, Open, Point, PresentCircumstances,
-    TileType,
+    Direction, Entity, EntityType, InitialParameters, Message, MoveResult, MoveTo, Open, Point,
+    PresentCircumstances, TileType,
 };
 
 struct Mapper {
@@ -38,6 +41,8 @@ impl Client for Mapper {
 
     fn tick(&mut self, pc: PresentCircumstances) -> Message {
         self.update_pos(pc.last_move_result);
+
+        grab_amulet_if_near(&pc);
 
         if let Some(action) = open_door_if_near(&pc) {
             self.last_move = None;
@@ -139,6 +144,18 @@ impl Mapper {
     }
 }
 
+fn grab_amulet_if_near(pc: &PresentCircumstances) -> Option<Direction> {
+    for test in &pc.visible_entities {
+        log(&format!(
+            "{:?}... {}, {}",
+            test.entity_type, test.data_int_a, test.data_int_b
+        ));
+        // if test.entity_type == EntityType::Item {
+        // }
+    }
+
+    return None;
+}
 fn open_door_if_near(pc: &PresentCircumstances) -> Option<Open> {
     let radius: i16 = pc.surroundings_radius as i16;
     let width: i16 = radius * 2 + 1;

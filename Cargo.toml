@@ -11,4 +11,4 @@ strip = true
 lto = true
 
 [dependencies]
-wasmbot_client = { git = "https://github.com/sjml/wasmbots.git", version = "0.0.0" }
+wasmbot_client = { git = "https://github.com/sjml/wasmbots.git", version = "0.0.0", branch = "next" }
